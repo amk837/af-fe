@@ -1,4 +1,4 @@
-export const ArticleCard = ({ article, onEdit, onDelete }) => (
+export const ArticleCard = ({ article, onEdit, onDelete, summarizing, onSummarize }) => (
   <div className="flex-col gap-2">
     <div className="flex justify-between items-center">
       <h2 className="text-xl font-semibold text-gray-800 text-left">{article.title}</h2>
@@ -8,6 +8,9 @@ export const ArticleCard = ({ article, onEdit, onDelete }) => (
           onClick={onEdit}
         >
           Edit
+        </button>
+        <button className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded" onClick={onSummarize}>
+          {summarizing ? "Summarizing..." : "Summarize"}
         </button>
         <button
           className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white font-semibold rounded"

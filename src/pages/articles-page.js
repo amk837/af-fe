@@ -11,6 +11,9 @@ export default function ArticlesPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [message, setMessage] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [summarizing, setSummarizing] = useState(null);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
 
   const showMessage = (msg) => {
     setMessage(msg);
@@ -90,6 +93,27 @@ export default function ArticlesPage() {
     }
   };
 
+  const handleSummarize = (id) => async () => {
+    setSummarizing(id);
+    setSummary(null);
+    try {
+      const response = await makeRequest(`/articles/${id}/summarize`, {
+        options: { method: "POST" },
+      });
+      if (response.success) {
+        setSummary(response.data.summary);
+        setSummaryModalOpen(true);
+      } else {
+        showMessage("Failed to summarize article");
+      }
+    } catch (error) {
+      showMessage("Error summarizing article");
+      console.error("Error summarizing article:", error);
+    } finally {
+      setSummarizing(null);
+    }
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto bg-gray-100 shadow-lg rounded-lg relative">
       {message && (
@@ -120,7 +144,15 @@ export default function ArticlesPage() {
           </div>
         </div>
       )}
-
+      {summaryModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-[500px]">
+            <h2 className="text-lg font-bold mb-4">Summary</h2>
+            <p className="text-gray-700">{summary}</p>
+            <button className="mt-4 px-4 py-2 bg-red-500 text-white rounded" onClick={() => setSummaryModalOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
       {articles.length ? (
         <ul className="space-y-4">
           {articles.map((article) => (
@@ -129,15 +161,14 @@ export default function ArticlesPage() {
                 article={article}
                 onDelete={handleDelete(article._id)}
                 onEdit={handleOpenForm(article)}
+                onSummarize={handleSummarize(article._id)}
+                summarizing={summarizing === article._id}
               />
             </li>
           ))}
         </ul>
       ) : null}
-
-      {loading ? (
-        <p className="text-center text-gray-500">Loading...</p>
-      ) : null}
+      {loading ? <p className="text-center text-gray-500">Loading...</p> : null}
     </div>
   );
 }

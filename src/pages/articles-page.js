@@ -6,6 +6,7 @@ import { ArticleForm } from "../components/article-form.js";
 export default function ArticlesPage() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   const [title, setTitle] = useState("");
@@ -19,10 +20,21 @@ export default function ArticlesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [msgSeverity, setMsgSeverity] = useState("success");
 
-  const showMessage = (msg) => {
+  const severityToColor = {
+    success: "green-600",
+    error: "red-600",
+    info: "blue-600",
+  };
+
+  const showMessage = (msg, severity = 'success') => {
     setMessage(msg);
-    setTimeout(() => setMessage(null), 3000);
+    setMsgSeverity(severity);
+    setTimeout(() => {
+      setMessage(null);
+      setMsgSeverity("success");
+    }, 3000);
   };
 
   const fetchArticles = useCallback(async () => {
@@ -53,9 +65,20 @@ export default function ArticlesPage() {
     setDescription("");
   };
 
+  const handleBackdropClick = (setter) => (e) => {
+    if (e.target.id === "backdrop") {
+      setter(false);
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    e.stopPropagation();
+    if (editingArticle && editingArticle.title === title && editingArticle.description === description) {
+      showMessage("No changes detected.", 'info');
+      return;
+    }
+    setUpdating(true);
     const method = editingArticle ? "PUT" : "POST";
     const url = `/articles/${editingArticle ? editingArticle._id : ""}`;
     try {
@@ -65,20 +88,21 @@ export default function ArticlesPage() {
           body: { title, description },
         },
       });
+      
       if (response.success) {
         showMessage(editingArticle ? "Article updated successfully" : "Article created successfully");
         fetchArticles();
         handleCloseForm();
       }
     } catch (error) {
-      showMessage("Failed to process request");
+      showMessage("Failed to process request", 'error');
       console.error("Error submitting article:", error);
-    } finally {
-      setLoading(false);
     }
+    setUpdating(false);
   };
 
   const handleDelete = (id) => async () => {
+    if (!id) return;
     if (!window.confirm("Are you sure you want to delete this article?")) return;
     try {
       const response = await makeRequest(`/articles/${id}`, {
@@ -89,12 +113,13 @@ export default function ArticlesPage() {
         fetchArticles();
       }
     } catch (error) {
-      showMessage("Failed to delete article");
+      showMessage("Failed to delete article", 'error');
       console.error("Error deleting article:", error);
     }
   };
 
   const handleSummarize = (id) => async () => {
+    if (!id) return;
     setSummarizing(id);
     setSummary(null);
     try {
@@ -105,17 +130,17 @@ export default function ArticlesPage() {
         setSummary(response.data.summary);
         setSummaryModalOpen(true);
       } else {
-        showMessage("Failed to summarize article");
+        showMessage("Failed to summarize article", 'error');
       }
     } catch (error) {
-      showMessage("Error summarizing article");
+      showMessage("Error summarizing article", 'error');
       console.error("Error summarizing article:", error);
-    } finally {
-      setSummarizing(null);
     }
+    setSummarizing(null);
   };
 
   const handleGenerateEmbedding = (id) => async () => {
+    if (!id) return;
     setEmbedding(id);
     try {
       const response = await makeRequest(`/articles/${id}/embed`, {
@@ -124,14 +149,13 @@ export default function ArticlesPage() {
       if (response.success) {
         showMessage("Embedding generated successfully");
       } else {
-        showMessage("Failed to generate embedding");
+        showMessage("Failed to generate embedding", 'error');
       }
     } catch (error) {
-      showMessage("Error generating embedding");
+      showMessage("Error generating embedding", 'error');
       console.error("Error generating embedding:", error);
-    } finally {
-      setEmbedding(null);
     }
+    setEmbedding(null);
   };
 
   const handleSearch = async () => {
@@ -148,11 +172,10 @@ export default function ArticlesPage() {
         showMessage("Failed to fetch search results");
       }
     } catch (error) {
-      showMessage("Error fetching search results");
+      showMessage("Error fetching search results", 'error');
       console.error("Error fetching search results:", error);
-    } finally {
-      setSearchLoading(false);
     }
+    setSearchLoading(false);
   };
 
   useEffect(() => {
@@ -162,7 +185,7 @@ export default function ArticlesPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto bg-gray-100 shadow-lg rounded-lg relative">
       {message && (
-        <div className="absolute top-4 right-4 p-3 bg-green-600 text-white rounded shadow-lg">
+        <div className={`fixed z-20 top-4 right-4 p-3 bg-${severityToColor[msgSeverity]} text-white rounded shadow-lg`}>
           {message}
         </div>
       )}
@@ -183,12 +206,16 @@ export default function ArticlesPage() {
         </button>
       </div>
       {formOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-gray-50 p-8 rounded-lg shadow-2xl w-[600px] h-[400px] border border-gray-300">
+        <div
+          id='backdrop'
+          className="fixed z-10 inset-0 flex items-center justify-center bg-black bg-opacity-50"
+          onClick={handleBackdropClick(setFormOpen)}
+        >
+          <div className="bg-gray-50 z-40 p-8 rounded-lg shadow-2xl w-[600px] h-[400px] border border-gray-300">
             <ArticleForm
               description={description}
               editingArticle={editingArticle}
-              loading={loading}
+              loading={updating}
               onClose={handleCloseForm}
               onSubmit={handleSubmit}
               setDescription={setDescription}
@@ -199,8 +226,12 @@ export default function ArticlesPage() {
         </div>
       )}
       {summaryModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-[500px]">
+        <div
+          id='backdrop'
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50"
+          onClick={handleBackdropClick(setSummaryModalOpen)}
+        >
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-[600px]">
             <h2 className="text-lg font-bold mb-4">Summary</h2>
             <p className="text-gray-700">{summary}</p>
             <button className="mt-4 px-4 py-2 bg-red-500 text-white rounded" onClick={() => setSummaryModalOpen(false)}>Close</button>
@@ -227,15 +258,19 @@ export default function ArticlesPage() {
       {loading ? <p className="text-center text-gray-500">Loading...</p> : null}
 
       {searchOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-[500px]">
+        <div
+          id='backdrop'
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50"
+          onClick={handleBackdropClick(setSearchOpen)}
+        >
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-[600px]">
             <h2 className="text-lg font-bold mb-4">Search Articles</h2>
             <input
               type="text"
               placeholder="Enter search query"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
+              className="w-full p-4 border border-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
             />
             <div className="flex justify-between mt-4">
               <button
@@ -255,7 +290,10 @@ export default function ArticlesPage() {
             {searchResults.length > 0 && (
               <ul className="mt-4 space-y-2">
                 {searchResults.map((result) => (
-                  <li key={result._id} className="p-3 bg-gray-100 rounded-lg border">{result.title}</li>
+                  <li key={result._id} className="p-3 bg-gray-100 rounded-lg border">
+                    <h3 className="text-lg font-bold">{result.title}</h3>
+                    <p className="text-sm text-gray-700">{result.description}</p>
+                  </li>
                 ))}
               </ul>
             )}
